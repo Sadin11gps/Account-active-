@@ -3,73 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deposit Money</title>
+    <title>Deposit Page</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #eef2f3; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .pay-card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 350px; text-align: center; }
-        .amount-display { font-size: 32px; font-weight: bold; color: #d63384; margin: 10px 0; }
-        .info-text { font-size: 14px; color: #555; margin-bottom: 20px; }
-        .method-box { display: flex; justify-content: space-around; margin-bottom: 20px; }
-        .method-item { cursor: pointer; border: 1px solid #ddd; padding: 10px; border-radius: 8px; width: 40%; }
-        .method-item.active { border-color: #d63384; background: #fff0f6; }
-        .wallet-num { background: #f8f9fa; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 18px; margin-bottom: 15px; color: #333; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; }
-        .btn-submit { width: 100%; padding: 12px; background: #d63384; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        body { font-family: sans-serif; background: #eef2f3; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.1); width: 330px; text-align: center; }
+        
+        /* নোটিশ এর স্টাইল */
+        .notice-box { background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; font-size: 14px; margin-bottom: 15px; border: 1px solid #ffeeba; font-weight: bold; }
+        
+        .amount-tag { font-size: 32px; font-weight: bold; color: #d63384; margin: 10px 0; }
+        .method-btn { padding: 8px 15px; border: 1px solid #ddd; cursor: pointer; border-radius: 5px; margin: 5px; display: inline-block; }
+        .active { background: #d63384; color: white; border-color: #d63384; }
+        .num-box { background: #f8f9fa; padding: 12px; margin: 15px 0; font-weight: bold; border-radius: 8px; font-size: 18px; color: #333; }
+        input { width: 100%; padding: 12px; margin-bottom: 15px; border-radius: 8px; border: 1px solid #ccc; box-sizing: border-box; }
+        .submit-btn { width: 100%; padding: 12px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; }
     </style>
 </head>
 <body>
 
-<div class="pay-card">
-    <h3 style="margin: 0;">Payment Required</h3>
-    <div class="amount-display" id="showAmount">৳0.00</div>
-    <p class="info-text">নিচের যেকোনো একটি মেথডে টাকা পাঠিয়ে TrxID দিন।</p>
-
-    <div class="method-box">
-        <div class="method-item active" id="bBtn" onclick="setMethod('Bkash')">Bkash</div>
-        <div class="method-item" id="nBtn" onclick="setMethod('Nagad')">Nagad</div>
+<div class="card">
+    <!-- এডমিন থেকে আসা নোটিশ এখানে দেখাবে -->
+    <div class="notice-box" id="displayNotice">Loading announcement...</div>
+    
+    <div class="amount-tag" id="displayAmt">৳0</div>
+    <p style="font-size: 13px; color: #666;">নিচের নাম্বারে টাকা পাঠিয়ে TrxID দিন।</p>
+    
+    <div>
+        <span id="bBtn" class="method-btn active" onclick="changeMethod('Bkash')">Bkash</span>
+        <span id="nBtn" class="method-btn" onclick="changeMethod('Nagad')">Nagad</span>
     </div>
 
-    <div class="wallet-num" id="showNumber">Loading...</div>
+    <div class="num-box" id="displayNum">Loading...</div>
 
-    <input type="text" id="trxID" placeholder="Enter Transaction ID">
-    <button class="btn-submit" onclick="submitPay()">Confirm Deposit</button>
-    <p id="msg" style="color: green; font-size: 13px; margin-top: 10px;"></p>
+    <input type="text" id="trxID" placeholder="Enter Transaction ID (TrxID)">
+    <button class="submit-btn" onclick="sendRequest()">Confirm Deposit</button>
+    <p id="msg" style="font-size: 12px; color: green; margin-top: 10px;"></p>
 </div>
 
 <script>
-    // Get settings from Admin
-    let settings = JSON.parse(localStorage.getItem('paymentSettings')) || { amount: 0, bkash: "Not Set", nagad: "Not Set" };
-    let currentMethod = "Bkash";
+    // আপনার ফায়ারবেস কনফিগারেশন এখানে দিন (Admin ফাইলের মতো একই)
+    const firebaseConfig = {
+  apiKey: "AIzaSyB1Pa3_ocRAWhfSxrlSXHX8fTvZAgj1A6w",
+  authDomain: "git-copy-ff-trm.firebaseapp.com",
+  databaseURL: "https://git-copy-ff-trm-default-rtdb.firebaseio.com",
+  projectId: "git-copy-ff-trm",
+  storageBucket: "git-copy-ff-trm.firebasestorage.app",
+  messagingSenderId: "926747365301",
+  appId: "1:926747365301:web:9e304003727d1a128393fc",
+  measurementId: "G-1RBZYNG1DZ"
+};
 
-    // Display the Fixed Amount
-    document.getElementById('showAmount').innerText = "৳" + settings.amount;
-    document.getElementById('showNumber').innerText = settings.bkash;
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
-    function setMethod(m) {
-        currentMethod = m;
-        document.getElementById('bBtn').classList.toggle('active', m === 'Bkash');
-        document.getElementById('nBtn').classList.toggle('active', m === 'Nagad');
-        document.getElementById('showNumber').innerText = (m === 'Bkash') ? settings.bkash : settings.nagad;
+    let currentSettings = {};
+    let selectedMethod = "Bkash";
+
+    // এডমিন থেকে সেটিংস রিয়েল-টাইম লোড করা
+    database.ref('settings').on('value', (snap) => {
+        currentSettings = snap.val();
+        if(currentSettings) {
+            document.getElementById('displayNotice').innerText = currentSettings.notice || "Deposit Now";
+            document.getElementById('displayAmt').innerText = "৳" + (currentSettings.amount || 0);
+            updateUI();
+        }
+    });
+
+    function changeMethod(m) {
+        selectedMethod = m;
+        document.getElementById('bBtn').className = (m === 'Bkash') ? 'method-btn active' : 'method-btn';
+        document.getElementById('nBtn').className = (m === 'Nagad') ? 'method-btn active' : 'method-btn';
+        updateUI();
     }
 
-    function submitPay() {
+    function updateUI() {
+        if(currentSettings) {
+            document.getElementById('displayNum').innerText = (selectedMethod === 'Bkash') ? currentSettings.bkash : currentSettings.nagad;
+        }
+    }
+
+    function sendRequest() {
         const trx = document.getElementById('trxID').value;
-        if(trx === "") { alert("TrxID দিন!"); return; }
+        if(!trx) return alert("অনুগ্রহ করে TrxID দিন!");
 
-        let deposits = JSON.parse(localStorage.getItem('deposits')) || [];
-        deposits.push({
-            id: Date.now(),
-            amount: settings.amount, // Admin set fixed amount
-            method: currentMethod,
+        database.ref('deposits').push({
+            amount: currentSettings.amount,
+            method: selectedMethod,
             trxID: trx,
-            status: "Pending"
+            status: "Pending",
+            time: Date.now()
+        }).then(() => {
+            document.getElementById('msg').innerText = "✅ রিকোয়েস্ট সফলভাবে পাঠানো হয়েছে!";
+            document.getElementById('trxID').value = "";
         });
-
-        localStorage.setItem('deposits', JSON.stringify(deposits));
-        document.getElementById('msg').innerText = "✅ রিকোয়েস্ট পাঠানো হয়েছে!";
-        document.getElementById('trxID').value = "";
     }
 </script>
-
 </body>
-  </html>
+</html>
